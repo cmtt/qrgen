@@ -80,7 +80,7 @@ $ echo "foobar" | qrgen --small
 The following command generates and displays a generated QR code using [ImageMagick](ImageMagick)'s `display` command.
 
 ````
-$ echo "foobar" | qrgen --svg | display -antialias -resample 400%  -
+$ echo "foobar" | qrgen --svg | display -antialias -resample 500% -define filter:support=0 -
 ````
 
 # License
