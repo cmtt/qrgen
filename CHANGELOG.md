@@ -15,16 +15,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Text can be passed as an argument: `qrgen "https://example.com"`. `-` reads stdin explicitly.
-- `--color auto|always|never` (default `auto`: colour only when stdout is a terminal; honours `NO_COLOR`, `CLICOLOR_FORCE` and `TERM=dumb`).
+- `--color auto|always|never` (default `auto`: colour only when stdout is a terminal; honours `NO_COLOR`, `CLICOLOR_FORCE` and `TERM=dumb`; stays plain on Windows unless `--color always`).
 - `shape-rendering="crispEdges"` in SVG output.
 - `-i`/`--invert` to swap dark and light modules, for plain output on dark themes.
 - `LICENSE` file, crate metadata, GitHub Actions CI, and a test suite: 30 unit tests (every renderer's output is parsed back and compared module by module across all versions, masks and ECC levels; input trimming; per-mode capacity; argument parsing; README/help consistency) and 16 CLI tests.
 
 ### Fixed
 - Input that is not valid UTF-8 is encoded in byte mode instead of crashing.
-- Input too long for a QR code reports a readable error (exit code 1) instead of panicking.
+- Input too long for a QR code reports a readable error (exit code 1) instead of panicking, naming the limit for that kind of input (7089 digits, 4296 alphanumeric characters, or 2953 bytes).
 - Invalid, negative or out-of-range `--margin` values are rejected with a usage error (exit code 2) instead of panicking or cropping the code.
-- `--svg` and `--small` can no longer be combined - previously `--small` was silently ignored.
+- `--svg` can no longer be combined with the terminal-only options `--small`, `--invert` and `--color` - previously `--small` was silently ignored.
 
 ### Dependencies
 - clap 2 → 4. This removes `atty` (RUSTSEC-2021-0145) and the unmaintained `ansi_term`.

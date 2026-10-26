@@ -160,15 +160,17 @@ pub fn svg(qr: &QrCode, margin: u8, out: &mut impl Write) -> io::Result<()> {
         out,
         "\t<rect width=\"100%\" height=\"100%\" fill=\"#FFFFFF\"/>"
     )?;
-    let mut path = Vec::new();
+    write!(out, "\t<path d=\"")?;
+    let mut separator = "";
     for y in 0..qr.size() {
         for x in 0..qr.size() {
             if qr.get_module(x, y) {
-                path.push(format!("M{},{}h1v1h-1z", x + margin, y + margin));
+                write!(out, "{}M{},{}h1v1h-1z", separator, x + margin, y + margin)?;
+                separator = " ";
             }
         }
     }
-    writeln!(out, "\t<path d=\"{}\" fill=\"#000000\"/>", path.join(" "))?;
+    writeln!(out, "\" fill=\"#000000\"/>")?;
     writeln!(out, "</svg>")
 }
 

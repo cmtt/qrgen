@@ -105,7 +105,7 @@ $ echo "foobar" | qrgen --svg | display -antialias -resample 500% -define filter
 
 ## Utilizing colors for rendering
 
-When writing to a terminal, `qrgen` paints the code in pure black and white (256-colour indices 16 and 231), so it reads the same on light and dark themes. In the default mode every module is two spaces with a black or white background, so no glyphs are involved and the result is exact in any font. Piped or redirected output stays plain text. Use `--color always|never` to override, or set `NO_COLOR` (disables) / `CLICOLOR_FORCE=1` (enables in auto mode). 
+When writing to a terminal, `qrgen` paints the code in pure black and white (256-colour indices 16 and 231), so it reads the same on light and dark themes. In the default mode every module is two spaces with a black or white background, so no glyphs are involved and the result is exact in any font. Piped or redirected output stays plain text. On Windows, auto mode stays plain because the legacy console doesn't interpret the colour codes; use `--color always` in Windows Terminal. Use `--color always|never` to override, or set `NO_COLOR` (disables) / `CLICOLOR_FORCE=1` (enables in auto mode). 
 
 # License
 

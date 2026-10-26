@@ -29,7 +29,13 @@ struct Cli {
     raw: bool,
 
     /// Paint black on white regardless of theme (auto: terminals only, honours NO_COLOR).
-    #[arg(long, value_enum, default_value_t = ColorWhen::Auto, value_name = "WHEN")]
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = ColorWhen::Auto,
+        value_name = "WHEN",
+        conflicts_with = "svg"
+    )]
     color: ColorWhen,
 
     /// Swap dark and light modules (for dark themes with --color never).
@@ -71,9 +77,12 @@ fn run(cli: &Cli) -> Result<(), String> {
     let opts = render::TermOpts {
         margin: cli.margin,
         invert: cli.invert,
-        color: use_color(cli.color, io::stdout().is_terminal(), |name| {
-            std::env::var(name).ok()
-        }),
+        color: use_color(
+            cli.color,
+            io::stdout().is_terminal(),
+            cfg!(windows),
+            |name| std::env::var(name).ok(),
+        ),
     };
 
     let mut out = BufWriter::new(io::stdout().lock());
@@ -124,18 +133,35 @@ fn encode(input: &[u8]) -> Result<QrCode, String> {
         None,
         true,
     )
-    .map_err(|e| {
-        format!(
-            "input is {} bytes, too long for a QR code (max 2953 bytes in byte mode): {}",
-            input.len(),
-            e
-        )
-    })
+    .map_err(|_| format!("input is too long for a QR code: {}", capacity_hint(input)))
+}
+
+/// Describes the input size against the version 40, ECC L limit for the
+/// encoding mode `make_segments` picks for it.
+fn capacity_hint(input: &[u8]) -> String {
+    match std::str::from_utf8(input) {
+        Ok(text) if QrSegment::is_numeric(text) => {
+            format!("{} digits (max 7089)", text.len())
+        }
+        Ok(text) if QrSegment::is_alphanumeric(text) => format!(
+            "{} characters (max 4296 using only 0-9, A-Z, space and $%*+-./:)",
+            text.len()
+        ),
+        _ => format!("{} bytes (max 2953)", input.len()),
+    }
 }
 
 /// Decides whether to paint with colours, following the NO_COLOR and
 /// CLICOLOR_FORCE conventions in auto mode.
-fn use_color(when: ColorWhen, stdout_is_tty: bool, env: impl Fn(&str) -> Option<String>) -> bool {
+///
+/// Auto mode stays off on Windows: the legacy console prints escape codes
+/// literally unless the program enables virtual terminal processing.
+fn use_color(
+    when: ColorWhen,
+    stdout_is_tty: bool,
+    windows: bool,
+    env: impl Fn(&str) -> Option<String>,
+) -> bool {
     let set = |name: &str| env(name).is_some_and(|v| !v.is_empty());
     match when {
         ColorWhen::Always => true,
@@ -146,7 +172,7 @@ fn use_color(when: ColorWhen, stdout_is_tty: bool, env: impl Fn(&str) -> Option<
             } else if set("CLICOLOR_FORCE") && env("CLICOLOR_FORCE").as_deref() != Some("0") {
                 true
             } else {
-                stdout_is_tty && env("TERM").as_deref() != Some("dumb")
+                stdout_is_tty && !windows && env("TERM").as_deref() != Some("dumb")
             }
         }
     }
@@ -173,12 +199,29 @@ mod tests {
     use super::*;
     use clap::error::ErrorKind;
 
-    fn color_with(when: ColorWhen, tty: bool, vars: &[(&str, &str)]) -> bool {
-        use_color(when, tty, |name| {
+    fn color_on(when: ColorWhen, tty: bool, windows: bool, vars: &[(&str, &str)]) -> bool {
+        use_color(when, tty, windows, |name| {
             vars.iter()
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| v.to_string())
         })
+    }
+
+    fn color_with(when: ColorWhen, tty: bool, vars: &[(&str, &str)]) -> bool {
+        color_on(when, tty, false, vars)
+    }
+
+    #[test]
+    fn auto_stays_plain_on_windows() {
+        assert!(!color_on(ColorWhen::Auto, true, true, &[]));
+        assert!(color_on(
+            ColorWhen::Auto,
+            true,
+            true,
+            &[("CLICOLOR_FORCE", "1")]
+        ));
+        assert!(color_on(ColorWhen::Always, false, true, &[]));
+        assert!(!color_on(ColorWhen::Never, true, true, &[]));
     }
 
     #[test]
@@ -292,11 +335,28 @@ mod tests {
         assert!(encode(&testutil::bytes(1, 2954)).is_err());
     }
 
+    fn too_long(input: &[u8]) -> String {
+        match encode(input) {
+            Err(e) => e,
+            Ok(_) => panic!("{} bytes unexpectedly fit", input.len()),
+        }
+    }
+
     #[test]
-    fn too_long_error_names_the_input_size() {
-        let err = encode(&[b'a'; 3000]).err().unwrap();
-        assert!(err.contains("3000 bytes"), "{}", err);
-        assert!(err.contains("too long"), "{}", err);
+    fn too_long_error_names_the_limit_for_the_input() {
+        let cases = [
+            ("1".repeat(7090), "7090 digits (max 7089)"),
+            ("A".repeat(4297), "4297 characters (max 4296"),
+            ("a".repeat(2954), "2954 bytes (max 2953)"),
+            ("é".repeat(1477), "2954 bytes (max 2953)"),
+        ];
+        for (input, expected) in cases {
+            let err = too_long(input.as_bytes());
+            assert!(err.starts_with("input is too long"), "{}", err);
+            assert!(err.contains(expected), "{}", err);
+        }
+        let err = too_long(&testutil::bytes(9, 3000));
+        assert!(err.contains("3000 bytes (max 2953)"), "{}", err);
     }
 
     #[test]
@@ -367,11 +427,18 @@ mod tests {
 
     #[test]
     fn conflicting_flags_are_rejected() {
-        for args in [&["--svg", "--small"][..], &["--svg", "--invert"]] {
+        for args in [
+            &["--svg", "--small"][..],
+            &["--svg", "--invert"],
+            &["--svg", "--color", "always"],
+            &["--svg", "--color=never"],
+        ] {
             let err = parse(args).expect_err("should conflict");
             assert_eq!(err.kind(), ErrorKind::ArgumentConflict, "{:?}", args);
         }
         assert!(parse(&["--small", "--invert", "--raw"]).is_ok());
+        // The --color default alone must not conflict with --svg.
+        assert!(parse(&["--svg"]).is_ok());
     }
 
     #[test]
