@@ -4,11 +4,13 @@ Renders text as QR codes on Unicode terminals or as SVG.
 
 ## Installation
 
-It is recommended to install Rust stable (1.85 or newer) using [Rustup](https://rustup.rs/). In order to build and install `qrgen`, run the following command:
+It is recommended to install Rust stable (1.85 or newer) using [Rustup](https://rustup.rs/). In order to build and install `qrgen` from [crates.io](https://crates.io/crates/qrgen), run the following command:
 
 ````bash
-cargo install --path .
+cargo install qrgen
 ````
+
+To install from a checkout of this repository instead, run `cargo install --path .`.
 
 ## Usage
 

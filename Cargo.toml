@@ -10,6 +10,7 @@ repository = "https://github.com/cmtt/qrgen"
 readme = "README.md"
 keywords = ["qr", "qrcode", "terminal", "cli", "svg"]
 categories = ["command-line-utilities"]
+include = ["src/**/*", "tests/**/*", "README.md", "LICENSE", "CHANGELOG.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
